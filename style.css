@@ -1,0 +1,65 @@
+:root {
+  --text: #252422;
+  --active: #403d39;
+  --highlight: #ccc5b9;
+  --mainbg: #eb5e28;
+  --secondbg: #fffcf2;
+}
+
+body {
+  color: var(--text);
+  background: var(--mainbg);
+  font-family: verdana;
+}
+
+.container {
+  display: flex;
+  flex-direction: row;
+}
+
+.settings {
+  width: 20%;
+}
+
+.game {
+  width: 80%;
+}
+
+h1 {
+  font-size: 30px;
+}
+
+h2 {
+  font-size: 22px;
+}
+
+.button {
+  font-size: 20px;
+  width: 100px;
+  text-align: center;
+  user-select: none;
+  color: var(--active);
+  background: var(--secondbg);
+}
+
+.button:hover, .button.active:hover {
+  background: var(--highlight);
+}
+
+.button.active {
+  color: var(--secondbg);
+  background: var(--active);
+}
+
+#timeBarOuter {
+  width: 600px;
+  font-size: 28px;
+  height: 30px;
+  background: var(--secondbg);
+}
+
+#timeBarInner {
+  height: 100%;
+  text-align: right;
+  background: var(--highlight);
+}
