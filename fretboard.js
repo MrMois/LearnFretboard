@@ -3,19 +3,23 @@ function getRandomInt(max) {
   return Math.floor(Math.random() * Math.floor(max));
 }
 
+
 function isActive(buttonId) {
   return window.buttonStates[buttonId];
 }
+
 
 function setActive(buttonId) {
   document.getElementById(buttonId).classList.add('active');
   window.buttonStates[buttonId] = true;
 }
 
+
 function setInactive(buttonId) {
   document.getElementById(buttonId).classList.remove('active');
   window.buttonStates[buttonId] = false;
 }
+
 
 function initButtons() {
 
@@ -49,131 +53,177 @@ function initButtons() {
   }
 }
 
-function setTimeBar(percent, text) {
-  this.inner = this.inner || document.getElementById('timeBarInner');
-  // Set time bar
-  this.inner.style.width = percent;
-  this.inner.innerHTML = text;
+
+/* NOTE DETECTOR STUFF */
+
+// Variables
+
+var audioCtx;
+var analyser;
+var sigBuffer;
+
+var micReadyFlag;
+var micErrorFlag;
+
+// Functions
+
+function initNoteDetector() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  sigBuffer = new Uint8Array(4096);
+  micReadyFlag = false;
 }
 
-function setScore(total, correct, avgTime) {
-  this.score = this.score || document.getElementById('score');
-  this.avgTime = this.avgTime || document.getElementById('avgTime');
-  // Set score text
-  this.score.innerHTML = 'Score: ' + correct + ' of ' + total + ' rounds';
-  this.avgTime.innerHTML = 'Average time: ' + (avgTime / 1000).toFixed(1) + 's';
+function openMicrophone() {
+  var constrains = {
+      audio: {
+          autoGainControl: false,
+          echoCancellation: false,
+          noiseSuppression: false
+      }};
+  // Open audio stream
+  navigator.mediaDevices.getUserMedia(constrains)
+      .then((stream) => {
+          window.audioCtx.createMediaStreamSource(stream).connect(window.analyser);
+          window.micReadyFlag = true;
+      })
+      .catch((err) => {
+          console.log(err);
+      });
+}
+
+function closeMicrophone() {
+
 }
 
 
-function getNewTarget() {
 
-  this.targetDiv = this.targetDiv || document.getElementById('target');
-
-  const strings = ['e', 'B', 'G', 'D', 'A', 'E'];
-  const notes = ['C', 'D', 'E', 'F', 'G', 'A', 'H'];
-
-  var activeStrings = [];
-
-  for(var s = 0; s < strings.length; s++) {
-    if(isActive('button-' + strings[s])) {
-      activeStrings += strings[s];
-    }
-  }
-
-  if(activeStrings.length === 0) {
-    return false;
-  }
-
-  var targetString = activeStrings[getRandomInt(activeStrings.length)];
-  var targetNote = notes[getRandomInt(7)];
-
-  this.targetDiv.innerHTML = 'Play ' + targetNote + ' on ' + targetString + ' string!';
-
-  return {'string': targetString, 'note': targetNote};
-}
 
 
 
 function gameLoop(time) {
 
-  time = time || 0;
+  if(!time || !isActive('button-play')) {
+    // Initial call or game explicitly stopped
+    this.resetGame = true;
+  }
+  else {
+    // Normal game logic
 
-  // Check if game should start
-  if(isActive('button-play') && time != 0) {
-
-    // GAME LOGIC HERE
-    // ---------------
-
-    const MAX_ROUND_TIME = 5000;
+    // Constants
+    const MAX_ROUND_TIME = 2000;
     const NEW_ROUND_DELAY = 500;
 
-    if(this.newGame) {
+    // Reset routine (start a new game)
+    if(this.resetGame) {
+
+      console.log('Starting new game @', time);
+      this.resetGame = false;
+
       // Stats tracking
       this.total = 0;
       this.correct = 0;
-      this.sumTime = 0;
+      this.gameStart = time;
+
       // Reset score display
-      setScore(0, 0, 0);
-      // Delete target (if set)
-      if(this.target) {
-        delete this.target;
-      }
-      this.newGame = false;
+      this.taskField = this.taskField || document.getElementById('task');
+      this.scoreField = this.scoreField || document.getElementById('score');
+      this.timeBar = this.timeBar || document.getElementById('timeBarInner');
+
+      this.resetRound = true;
     }
 
-    if(!this.target) {
-      // Get new target
-      this.target = getNewTarget();
+    if(this.resetRound) {
 
-      if(!this.target) {
-        // Failed to get a target
-        console.log('Select atleast one string!');
+      console.log('Starting new round @', time);
+      this.resetRound = false;
+
+      // Get new target
+
+      var allowedStrings = ['e','B','G','D','A','E'].filter((s) => isActive('button-' + s));
+
+      if(allowedStrings.length === 0) {
+        console.log('Failed to start game, no strings selected.');
+        alert('Please select atleast one string.');
         setInactive('button-play');
-      }
-      else {
-        // Set new round start
-        this.roundStart = time + NEW_ROUND_DELAY;
+        window.requestAnimationFrame(gameLoop);
+        // Exit for next gameloop
         return;
       }
+
+      const notes = ['C','C#','Db','D','D#','Eb','E','F','F#','Gb','G','G#','Ab','A','A#','Bb','B'];
+
+      var allowedNotes = [];
+
+      notes.forEach((n) => {
+        switch(n.slice(-1)) {
+          case '#':
+            if(isActive('button-sharp')) {
+              allowedNotes.push(n);
+            }
+            break;
+          case 'b':
+            if(isActive('button-flat')) {
+              allowedNotes.push(n);
+            }
+            break;
+          default:
+            allowedNotes.push(n);
+        }
+      });
+
+      console.log(allowedNotes);
+
+      this.target = {
+        string: allowedStrings[getRandomInt(allowedStrings.length)],
+        note: allowedNotes[getRandomInt(allowedNotes.length)],
+      };
+
+      this.roundStart = time + NEW_ROUND_DELAY;
+
+
     }
-    console.log(this.target);
 
     // Check if round time over
     if(time - this.roundStart > MAX_ROUND_TIME) {
       // Missed without guess
 
+      console.log('Time expired, round over @', time);
+
       this.total += 1;
-      this.sumTime += MAX_ROUND_TIME;
 
-      // Set score
-      setScore(this.total, this.correct, this.sumTime / this.total);
-
-      delete this.target;
+      this.resetRound = true;
     }
     // Check if guitar note detected
     else if(false) {
+
       this.total += 1;
       // TODO: Check if correct note!
-      this.correct += (false);
-      this.sumTime += MAX_ROUND_TIME;
 
-      // Set score
-      setScore(this.total, this.correct, this.sumTime / this.total);
-
-      delete this.target;
+      this.resetRound = true;
     }
-    // Just update time bar
+    // Waiting for next round
+    if(this.roundStart > time) {
+      // Draw waiting screen time bar
+      this.timeBar.style.width = '100%';
+      this.timeBar.innerHTML = 'Waiting..';
+    }
+    // In round, but no special event
     else {
-      let timeInRound = time - this.roundStart;
-      let percent = (100 - timeInRound / MAX_ROUND_TIME * 100) + '%';
-      let text = ((MAX_ROUND_TIME - timeInRound) / 1000).toFixed(1) + 's';
-      setTimeBar(percent, text);
-    }
 
-    // ---------------
-  }
-  else {
-    this.newGame = true;
+      this.taskField.innerHTML = 'Play ' + this.target.note + ' on ' + this.target.string + '-string!';
+      this.scoreField.innerHTML = 'Score: ' + this.correct + ' of ' + this.total;
+
+      // Just update time bar
+
+      var sinceStart = time - this.roundStart;
+
+      var percent = (1 - sinceStart / MAX_ROUND_TIME) * 100 + '%';
+      var timeLeftInSec = (Math.max(MAX_ROUND_TIME - sinceStart, 0) / 1000).toFixed(1) + 's';
+
+      this.timeBar.style.width = percent;
+      this.timeBar.innerHTML = timeLeftInSec;
+    }
   }
 
   window.requestAnimationFrame(gameLoop);
@@ -183,7 +233,11 @@ function gameLoop(time) {
 
 window.onload = function() {
 
+  initNoteDetector();
   initButtons();
+
+  openMicrophone();
+
   gameLoop();
 
 }
